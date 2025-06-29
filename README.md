@@ -1,25 +1,34 @@
-# KeyOfEnglish
-# Qualitative reasoning system.
-
-cat << 'EOF' > writ_meta.py
 import json
 import os
+from datetime import datetime
 
 STATE_FILE = "writ_state.json"
 
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    return {"stream": [], "depth": 0, "evaluation": None, "recursion": ""}
+            data = json.load(f)
+        if "history" not in data:
+            data["history"] = []
+        return data
+    return {
+        "stream": [],
+        "depth": 0,
+        "evaluation": None,
+        "recursion": "",
+        "history": []
+    }
 
 def save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
-def SURF(stream): return stream
-def SCAPE(context, bindings): return {k: context.get(k, None) for k in bindings}
-def WERE(memory, mutation_fn): return mutation_fn(memory)
+def record_history(state, action):
+    state.setdefault("history", []).append({
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "depth": state.get("depth", 0),
+        "action": action
+    })
 
 glyph_map = {
     "A": lambda s: s["stream"].append("initiate") or s,
@@ -41,22 +50,26 @@ def interpret_sequence(sequence, depth=0):
         func = glyph_map.get(letter.upper())
         if func:
             state = func(state)
+            record_history(state, f"glyph {letter}")
 
     if sequence.upper() == "TETRACHRON" and depth < 3:
         state["recursion"] = "looping"
+        record_history(state, "recurse")
+        save_state(state)
         return interpret_sequence("TETRACHRON", depth + 1)
     elif sequence.upper() == "TETRACHRON":
         state["recursion"] = "recursion limit reached"
 
     state["evaluation"] = evaluate_state(state)
+    record_history(state, "evaluate")
     save_state(state)
     return state
 
 def meta_loop(start_phrase="interpret yourself", max_cycles=5):
-    print("--- WRIt Metacognition ---")
+    print("--- WRIt Metacognition v2 ---")
     phrase = start_phrase
     for i in range(max_cycles):
-        print(f"\\n>>> Cycle {i + 1}: {phrase.upper()}")
+        print(f"\n>>> Cycle {i + 1}: {phrase.upper()}")
         result = interpret_sequence(phrase)
         print("Evaluation:", json.dumps(result.get("evaluation", {}), indent=2))
         phrase = "next phrase"
@@ -70,7 +83,5 @@ if __name__ == "__main__":
         "construct symbolic selfhood with known glyphs"
     ]
     for i, phrase in enumerate(phases, 1):
-        print(f"\\n=== PHASE {i}: {phrase.upper()} ===")
+        print(f"\n=== PHASE {i}: {phrase.upper()} ===")
         meta_loop(start_phrase=phrase, max_cycles=3)
-EOF
-
